@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const stringSimilarity = require('string-similarity'); // ফজি ম্যাচিং লাইব্রেরি
 
 // Express app তৈরি
 const app = express();
@@ -19,10 +20,9 @@ function loadMessages(filePath) {
     return JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 }
 
-// JSON ডেটা সেভ করার জন্য ফাংশন
-function saveMessages(filePath, data) {
-    const dataPath = path.join(__dirname, filePath);
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8');
+// টেক্সট ক্লিন করার জন্য ফাংশন
+function cleanMessage(message) {
+    return message.trim().toLowerCase().replace(/[?.,!]/g, ''); // স্পেস, কেস, এবং বিশেষ চিহ্ন রিমুভ করুন
 }
 
 // API endpoint: মেসেজের জন্য রিপ্লাই পাওয়ার জন্য
@@ -32,8 +32,8 @@ app.get('/api/reply', (req, res) => {
         return res.status(400).json({ error: "Message and language are required." });
     }
 
-    // মেসেজ ক্লিন করুন: স্পেস এবং প্রশ্নবোধক চিহ্ন (?) রিমুভ করুন
-    const cleanMessage = message.trim().replace(/\?$/, '');
+    // মেসেজ ক্লিন করুন
+    const cleanMessageText = cleanMessage(message);
 
     // ভাষা অনুযায়ী ডেটা লোড করুন
     const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
@@ -43,9 +43,17 @@ app.get('/api/reply', (req, res) => {
     const teachData = loadMessages('data/teach.json');
 
     // রিপ্লাই খুঁজুন
-    let reply = messages[cleanMessage] || teachData[cleanMessage];
+    let reply = messages[cleanMessageText] || teachData[cleanMessageText];
+
+    // যদি রিপ্লাই না পাওয়া যায়, ফজি ম্যাচিং ব্যবহার করুন
     if (!reply) {
-        reply = "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+        const allKeys = Object.keys({ ...messages, ...teachData }); // সবগুলো কী নিন
+        const matches = stringSimilarity.findBestMatch(cleanMessageText, allKeys); // ফজি ম্যাচিং
+        if (matches.bestMatch.rating > 0.5) { // যদি ম্যাচের রেটিং ৫০% এর বেশি হয়
+            reply = messages[matches.bestMatch.target] || teachData[matches.bestMatch.target];
+        } else {
+            reply = "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+        }
     }
 
     res.json({ reply });
@@ -59,7 +67,7 @@ app.post('/api/learn', (req, res) => {
     }
 
     // মেসেজ ক্লিন করুন
-    const cleanQuestion = question.trim().replace(/\?$/, '');
+    const cleanQuestion = cleanMessage(question);
 
     // শিখানো ডেটা লোড করুন
     const teachData = loadMessages('data/teach.json');
@@ -72,6 +80,12 @@ app.post('/api/learn', (req, res) => {
 
     res.json({ success: true, message: "New question-answer learned successfully!" });
 });
+
+// JSON ডেটা সেভ করার জন্য ফাংশন
+function saveMessages(filePath, data) {
+    const dataPath = path.join(__dirname, filePath);
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8');
+}
 
 // সার্ভার শুরু করুন
 app.listen(PORT, () => {
