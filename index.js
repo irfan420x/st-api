@@ -13,6 +13,9 @@ app.use(express.static('public'));
 // JSON ডেটা লোড করার জন্য ফাংশন
 function loadMessages(filePath) {
     const dataPath = path.join(__dirname, filePath);
+    if (!fs.existsSync(dataPath)) {
+        return {}; // যদি ফাইল না থাকে, খালি অবজেক্ট রিটার্ন করুন
+    }
     return JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 }
 
@@ -36,31 +39,36 @@ app.get('/api/reply', (req, res) => {
     const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
     const messages = loadMessages(filePath);
 
+    // শিখানো ডেটা লোড করুন
+    const teachData = loadMessages('data/teach.json');
+
     // রিপ্লাই খুঁজুন
-    const reply = messages[cleanMessage] || "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+    let reply = messages[cleanMessage] || teachData[cleanMessage];
+    if (!reply) {
+        reply = "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+    }
 
     res.json({ reply });
 });
 
 // API endpoint: নতুন প্রশ্ন-উত্তর শিখানোর জন্য
 app.post('/api/learn', (req, res) => {
-    const { question, answer, lang } = req.body;
-    if (!question || !answer || !lang) {
-        return res.status(400).json({ error: "Question, answer, and language are required." });
+    const { question, answer } = req.body;
+    if (!question || !answer) {
+        return res.status(400).json({ error: "Question and answer are required." });
     }
 
     // মেসেজ ক্লিন করুন
     const cleanQuestion = question.trim().replace(/\?$/, '');
 
-    // ভাষা অনুযায়ী ডেটা লোড করুন
-    const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
-    const messages = loadMessages(filePath);
+    // শিখানো ডেটা লোড করুন
+    const teachData = loadMessages('data/teach.json');
 
     // নতুন প্রশ্ন-উত্তর যোগ করুন
-    messages[cleanQuestion] = answer;
+    teachData[cleanQuestion] = answer;
 
     // ডেটা সেভ করুন
-    saveMessages(filePath, messages);
+    saveMessages('data/teach.json', teachData);
 
     res.json({ success: true, message: "New question-answer learned successfully!" });
 });
