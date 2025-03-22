@@ -9,8 +9,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "fuzzyset.js": "^0.1.3",
-    "phonetic": "^1.0.0", // ফোনেটিক ম্যাচিং জন্য
-    "stemmer": "^2.0.0" // স্টেমিং জন্য
+    "phonetic": "^1.0.0",
+    "stemmer": "^2.0.0"
   }
-}g on http://localhost:${PORT}`);
-});
+}
