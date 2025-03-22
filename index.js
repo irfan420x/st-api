@@ -6,28 +6,40 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware to parse JSON
+app.use(express.json());
+app.use(express.static('public'));
+
 // JSON ডেটা লোড করার জন্য ফাংশন
-function loadMessages() {
-    const dataPath = path.join(__dirname, 'data.json');
-    const rawData = fs.readFileSync(dataPath);
-    return JSON.parse(rawData);
+function loadMessages(filePath) {
+    const dataPath = path.join(__dirname, filePath);
+    return JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 }
 
-// Static files (public folder)
-app.use(express.static('public'));
+// JSON ডেটা সেভ করার জন্য ফাংশন
+function saveMessages(filePath, data) {
+    const dataPath = path.join(__dirname, filePath);
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf-8');
+}
 
 // API endpoint: মেসেজের জন্য রিপ্লাই পাওয়ার জন্য
 app.get('/api/reply', (req, res) => {
-    const userMessage = req.query.message; // ইউজারের মেসেজ
-    const messages = loadMessages(); // ডেটা লোড করুন
+    const { message, lang } = req.query; // ইউজারের মেসেজ এবং ভাষা
+    if (!message || !lang) {
+        return res.status(400).json({ error: "Message and language are required." });
+    }
 
-    // মেসেজের জন্য রিপ্লাই খুঁজুন
-    const reply = messages[userMessage] || "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+    // মেসেজ ক্লিন করুন: স্পেস এবং প্রশ্নবোধক চিহ্ন (?) রিমুভ করুন
+    const cleanMessage = message.trim().replace(/\?$/, '');
 
-    res.json({ reply }); // রিপ্লাই রিটার্ন করুন
+    // ভাষা অনুযায়ী ডেটা লোড করুন
+    const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
+    const messages = loadMessages(filePath);
+
+    // রিপ্লাই খুঁজুন
+    const reply = messages[cleanMessage] || "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
+
+    res.json({ reply });
 });
 
-// সার্ভার শুরু করুন
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+// API endpoint: নতুন প্রশ্ন-উত্তর শিখ
