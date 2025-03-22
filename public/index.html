@@ -10,14 +10,9 @@
             text-align: center;
             margin: 50px;
         }
-        input {
+        input, button {
             padding: 10px;
-            width: 300px;
-            margin-bottom: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            cursor: pointer;
+            margin: 10px;
         }
         #response {
             margin-top: 20px;
@@ -30,20 +25,35 @@
     <h1>রোমান্টিক বট</h1>
     <p>একটি মেসেজ লিখুন এবং রিপ্লাই পান:</p>
     <input type="text" id="message" placeholder="মেসেজ লিখুন...">
+    <select id="lang">
+        <option value="bangla">বাংলা</option>
+        <option value="english">ইংরেজি</option>
+    </select>
     <button onclick="sendMessage()">পাঠান</button>
     <div id="response"></div>
+
+    <h2>নতুন প্রশ্ন-উত্তর শিখান</h2>
+    <input type="text" id="newQuestion" placeholder="নতুন প্রশ্ন">
+    <input type="text" id="newAnswer" placeholder="নতুন উত্তর">
+    <select id="newLang">
+        <option value="bangla">বাংলা</option>
+        <option value="english">ইংরেজি</option>
+    </select>
+    <button onclick="teachBot()">শিখান</button>
 
     <script>
         // মেসেজ পাঠানোর জন্য ফাংশন
         function sendMessage() {
             const message = document.getElementById('message').value;
+            const lang = document.getElementById('lang').value;
+
             if (!message) {
                 alert("মেসেজ লিখুন!");
                 return;
             }
 
             // API কল
-            fetch(`/api/reply?message=${encodeURIComponent(message)}`)
+            fetch(`/api/reply?message=${encodeURIComponent(message)}&lang=${lang}`)
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('response').innerText = data.reply;
@@ -51,6 +61,35 @@
                 .catch(error => {
                     console.error('Error:', error);
                     document.getElementById('response').innerText = "কোনো ত্রুটি হয়েছে।";
+                });
+        }
+
+        // নতুন প্রশ্ন-উত্তর শিখানোর জন্য ফাংশন
+        function teachBot() {
+            const question = document.getElementById('newQuestion').value;
+            const answer = document.getElementById('newAnswer').value;
+            const lang = document.getElementById('newLang').value;
+
+            if (!question || !answer) {
+                alert("প্রশ্ন এবং উত্তর লিখুন!");
+                return;
+            }
+
+            // API কল
+            fetch('/api/learn', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ question, answer, lang })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert("কোনো ত্রুটি হয়েছে।");
                 });
         }
     </script>
