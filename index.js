@@ -1,9 +1,10 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const FuzzySet = require('fuzzyset.js'); // ফজি ম্যাচিং
-const phonetic = require('phonetic'); // ফোনেটিক ম্যাচিং
-const stemmer = require('stemmer'); // স্টেমিং
+const natural = require('natural'); // স্টেমিং ও ফজি ম্যাচিং
+const nspell = require('nspell'); // বানান সংশোধন
+const dictionary = require('dictionary-en'); // ইংরেজির অভিধান
+const bengaliStemmer = require('bengali-stemmer'); // বাংলা স্টেমিং
 
 // Express app তৈরি
 const app = express();
@@ -24,64 +25,60 @@ function loadMessages(filePath) {
 
 // টেক্সট ক্লিন করার জন্য ফাংশন
 function cleanMessage(message) {
-    return message.trim().toLowerCase().replace(/[?.,!]/g, ''); // স্পেস, কেস, এবং বিশেষ চিহ্ন রিমুভ করুন
+    return message.trim().toLowerCase().replace(/[?.,!]/g, '');
 }
 
-// ফোনেটিক কী তৈরি করার জন্য ফাংশন
-function getPhoneticKey(text) {
-    return phonetic.soundex(text); // ফোনেটিক কী তৈরি করুন
+// বানান সংশোধনের জন্য ফাংশন (ইংরেজি)
+async function correctSpelling(text) {
+    return new Promise((resolve) => {
+        dictionary((err, dict) => {
+            if (err) throw err;
+            const spell = nspell(dict);
+            const words = text.split(' ');
+            const correctedWords = words.map(word => spell.correct(word) ? word : spell.suggest(word)[0] || word);
+            resolve(correctedWords.join(' '));
+        });
+    });
 }
 
-// স্টেমিং করার জন্য ফাংশন
-function getStemmedText(text) {
-    return text.split(' ').map(word => stemmer(word)).join(' '); // শব্দের মূল অংশ বের করুন
+// স্টেমিং করার জন্য ফাংশন (বাংলা)
+function getStemmedText(text, lang) {
+    if (lang === 'bangla') {
+        return text.split(' ').map(word => bengaliStemmer.stem(word)).join(' ');
+    } else {
+        return text.split(' ').map(word => natural.PorterStemmer.stem(word)).join(' ');
+    }
 }
 
 // API endpoint: মেসেজের জন্য রিপ্লাই পাওয়ার জন্য
-app.get('/api/reply', (req, res) => {
-    const { message, lang } = req.query; // ইউজারের মেসেজ এবং ভাষা
+app.get('/api/reply', async (req, res) => {
+    const { message, lang } = req.query;
     if (!message || !lang) {
         return res.status(400).json({ error: "Message and language are required." });
     }
 
-    // মেসেজ ক্লিন করুন
-    const cleanMessageText = cleanMessage(message);
+    let cleanMessageText = cleanMessage(message);
+
+    // বানান সংশোধন করা (শুধু ইংরেজির জন্য)
+    if (lang === 'english') {
+        cleanMessageText = await correctSpelling(cleanMessageText);
+    }
 
     // ভাষা অনুযায়ী ডেটা লোড করুন
     const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
     const messages = loadMessages(filePath);
-
-    // শিখানো ডেটা লোড করুন
     const teachData = loadMessages('data/teach.json');
 
-    // সবগুলো কী নিন
+    // সব প্রশ্ন তালিকা নিন
     const allKeys = Object.keys({ ...messages, ...teachData });
 
-    // FuzzySet ব্যবহার করে ফজি ম্যাচিং সেট করুন
-    const fuzzySet = FuzzySet(allKeys);
-    const match = fuzzySet.get(cleanMessageText); // ফজি ম্যাচিং
+    // স্টেমিং করা টেক্সট
+    const stemmedText = getStemmedText(cleanMessageText, lang);
 
-    let reply;
-    if (match && match[0][0] > 0.5) { // যদি ম্যাচের স্কোর ৫০% এর বেশি হয়
-        const matchedKey = match[0][1];
-        reply = messages[matchedKey] || teachData[matchedKey];
-    } else {
-        // ফোনেটিক ম্যাচিং চেষ্টা করুন
-        const phoneticKey = getPhoneticKey(cleanMessageText);
-        const phoneticMatch = allKeys.find(key => getPhoneticKey(key) === phoneticKey);
-        if (phoneticMatch) {
-            reply = messages[phoneticMatch] || teachData[phoneticMatch];
-        } else {
-            // স্টেমিং চেষ্টা করুন
-            const stemmedText = getStemmedText(cleanMessageText);
-            const stemmedMatch = allKeys.find(key => getStemmedText(key) === stemmedText);
-            if (stemmedMatch) {
-                reply = messages[stemmedMatch] || teachData[stemmedMatch];
-            } else {
-                reply = "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
-            }
-        }
-    }
+    // স্টেমিং করা টেক্সটের সাথে মিল খুঁজুন
+    const match = allKeys.find(key => getStemmedText(key, lang) === stemmedText);
+
+    let reply = match ? messages[match] || teachData[match] : "দুঃখিত, আমি এই মেসেজের উত্তর জানি না। 😔";
 
     res.json({ reply });
 });
@@ -93,10 +90,7 @@ app.post('/api/learn', (req, res) => {
         return res.status(400).json({ error: "Question, answer, and language are required." });
     }
 
-    // মেসেজ ক্লিন করুন
     const cleanQuestion = cleanMessage(question);
-
-    // ভাষা অনুযায়ী ডেটা লোড করুন
     const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
     const teachData = loadMessages('data/teach.json');
 
