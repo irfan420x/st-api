@@ -42,4 +42,30 @@ app.get('/api/reply', (req, res) => {
     res.json({ reply });
 });
 
-// API endpoint: নতুন প্রশ্ন-উত্তর শিখ
+// API endpoint: নতুন প্রশ্ন-উত্তর শিখানোর জন্য
+app.post('/api/learn', (req, res) => {
+    const { question, answer, lang } = req.body;
+    if (!question || !answer || !lang) {
+        return res.status(400).json({ error: "Question, answer, and language are required." });
+    }
+
+    // মেসেজ ক্লিন করুন
+    const cleanQuestion = question.trim().replace(/\?$/, '');
+
+    // ভাষা অনুযায়ী ডেটা লোড করুন
+    const filePath = lang === 'bangla' ? 'data/bangla.json' : 'data/english.json';
+    const messages = loadMessages(filePath);
+
+    // নতুন প্রশ্ন-উত্তর যোগ করুন
+    messages[cleanQuestion] = answer;
+
+    // ডেটা সেভ করুন
+    saveMessages(filePath, messages);
+
+    res.json({ success: true, message: "New question-answer learned successfully!" });
+});
+
+// সার্ভার শুরু করুন
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
