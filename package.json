@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "fuzzyset.js": "^0.1.3",
+    "fuzzyset.js": "^0.0.2",
     "phonetic": "^1.0.0",
     "stemmer": "^2.0.0"
   }
